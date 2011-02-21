@@ -1,8 +1,13 @@
 #!/usr/bin/python
 """Set of boto wrappers for running the MTurk coin-flip experiment 
-   (http://alexeymk.com/flipping-coins-through-mechanical-turk-part-1).
+   
+   See: (http://alexeymk.com/flipping-coins-through-mechanical-turk-part-1).
 
+   To replicate the experiment, a matching php file (flipacoin_generic.php)
+   would also be required. Alas, that is more code that should also probably
+   get cleaned up before it sees the light of day.
 """
+#TODO: be more specific with imports
 from boto.mturk.connection import *
 from boto.mturk.question import *
 from boto.mturk.price import *
@@ -70,7 +75,7 @@ def accept_and_pay(worker_id, assign_id, bonus_price=0.00,
   """pays for assignment; returns False if something went wrong, else True"""
   try:
     result = conn.approve_assignment(assign_id)
-    #TODO: make sure to avoid possible double-bonus
+    #TODO: make sure to avoid the possibility of paying the same bonus twice 
     if bonus_price > 0:
       conn.grant_bonus(worker_id, assign_id, Price(amount=bonus_price), reason)
   except MTurkRequestError:
@@ -127,14 +132,13 @@ def create_ht_hits(qual_groups, base_price=0.05, heads='10c', tails='5c',
 
   # make sure to encode ampersands, otherwise the ExternalQuestion schema gets
   # pretty angry: http://alexeymk.com/xsanyuri-doesnt-allow-ampersands
-  q_url = urllib.quote_plus(EXTERNAL_Q_URL + "?" + \ 
-		  	    urllib.urlencode({'heads'  : heads,
-	   				      'tails'  : tails,
-	 				      'flipGen': str(flip_but).lower(),
-	 				      'real'   : str(not TEST_MODE).lower()
-					     })
-	  )
-  print q_url
+  q_url = EXTERNAL_Q_URL + "?" + urllib.quote_plus(urllib.urlencode({
+            'heads'  : heads,
+            'tails'  : tails,
+            'flipGen': str(flip_but).lower(),
+            'real'   : str(TEST_MODE).lower()
+          }))
+  
   desc = """Project Random is running a one-question quiz.
    	    Note: You may only participate in one ProjectRandom experiment."""
   title = "One quick question. Should take ~15 seconds."
@@ -150,20 +154,22 @@ def create_ht_hits(qual_groups, base_price=0.05, heads='10c', tails='5c',
     # http://docs.python.org/tutorial/controlflow.html#unpacking-argument-lists
     group_name = str(group.values())
 
-    print group_name, build_quals(**group)
-
     result_hits.append((group, projectrandom_q(build_quals(**group))))
   
   return result_hits
-  
+ 
 def cheated(answer):
   return is_head(answer) != answer_lookup(answer, u'flip_true')
+
 def cheated_for_profit(answer):
   return is_head(answer) and not answer_lookup(answer, u'flip_true')
+
 def has_result(answer): # some edge-cases don't have results.
   return any(map(lambda ans: ans.QuestionIdentifier == u'result', answer[0]))
+
 def is_head(answer): 
   return answer_lookup(answer, u'result')
+
 def answer_lookup(answer, key): 
   """in multiple-part answer scenarios, use key to look up answer"""
   # with multiple rows, check all parts of answer
@@ -220,6 +226,7 @@ def pay_for_work (h_list):
           print "rejected: %s" % (answer[1],)
 
 ############ Data, hiding in code for convenience ########################
+#TODO: at the very least have a separate file for stored HITIds. 
 #project random 1 (2c/4c)
 hit_list = [("100%", u'1NDCZYKKHE0PJNCX38JN8DTG8KACRG'),
             ("98-99%", u'1HAP633YC83RR30ZYB26GFMFT755IX'),
@@ -254,6 +261,7 @@ hit_list5 = [('100%', u'1562QNH137YXAW2OVS1A5SEIXFHAAX'),
 	    ]
 
 ############ Code that is actually changed and run ######################
+#TODO: Potentially have a __main__ method here
 qual_groups = [{'accept_min': 100, 'min_done':20},
 	       {'accept_max': 99, 'accept_min': 98, 'min_done':20},
 	       {'accept_max': 97, 'accept_min': 98, 'min_done':20},
