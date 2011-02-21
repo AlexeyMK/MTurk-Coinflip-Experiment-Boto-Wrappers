@@ -1,13 +1,16 @@
 #!/usr/bin/python
-"""Documentation goes here"""
+"""Set of boto wrappers for running the MTurk coin-flip experiment 
+   (http://alexeymk.com/flipping-coins-through-mechanical-turk-part-1).
+
+"""
 from boto.mturk.connection import *
 from boto.mturk.question import *
 from boto.mturk.price import *
 from boto.mturk.qualification import *
 from boto.s3 import *
 from os.path import *
-from urllib import urlencode
-import sys,getopt,re,cPickle,urllib,string,time,os,uuid,mimetypes,codecs
+import urllib
+import sys,os
 
 TEST_MODE = True
 SAFETY_BREAK = True
@@ -23,18 +26,21 @@ else:
   conn = MTurkConnection()
 
 def post_html_question(title, description, quals, num_tasks, price, q_url, 
-  duration_s=120, keywords=[]):
+  duration_s=120, keywords=None):
   """Wrapper for creating & posting 'ExternalQuestion' on MTurk.
      
      see git.to/externalq for Amazon's ExternalQuestion docs
      see git.to/createhit for boto's create_hit method
 
-     quals -- Qualifications object list. Use buildQuals to create.
+     quals -- Qualifications object list. Use build_quals to create.
      price -- float (IE, 0.05 for 5 cents)
      duration_s -- max number of seconds the HIT can take. 
 
      Return the resulting HITId or -1 on failure.   
   """  
+  if keywords == None: 
+    keywords = []
+
   question = ExternalQuestion(q_url, HTML_FRAME_HEIGHT)
   
   result = conn.create_hit(
@@ -78,11 +84,12 @@ def reject(assign_id, reason="That was not correct"):
     conn.reject_assignment(assign_id, reason)
     return True
   except BaseException:
+    #TODO: Less disgustingly general exception here
     print "looks like this one was already rejected. or, any other error" 
     return False
 
 ############ Experiment-specific code: #######################################
-def buildQuals(accept_max=None, accept_min=None, max_done=None, min_done=None):
+def build_quals(accept_max=None, accept_min=None, max_done=None, min_done=None):
   """handles setting four useful (for this experiment) qualfications"""
   qualifications = Qualifications()
   #TODO: explore changing code below to *args style
@@ -106,10 +113,10 @@ def buildQuals(accept_max=None, accept_min=None, max_done=None, min_done=None):
   return qualifications
 
 def create_ht_hits(qual_groups, base_price=0.05, heads='10c', tails='5c', 
-                   flip_but='false')
+ 		   flip_but='false'):
   """Creates External Hits for an MTurk run
  
-     qual_groups -- list of kw-arg dicts to be passed to buildQuals
+     qual_groups -- list of kw-arg dicts to be passed to build_quals
      base_price -- double (ie, 0.05)
      heads -- string, used website descriptors (IE, '10c')
      tails -- string, used website descriptors (IE, '5c')
@@ -117,13 +124,19 @@ def create_ht_hits(qual_groups, base_price=0.05, heads='10c', tails='5c',
 
      Return the HITIds list of generated HITs.
   """
-  q_url = EXTERNAL_Q_URL + "?" + urlencode({'heads'  : heads,
-	  				    'tails'  : tails,
-					    'flipGen': flip_but,
-					    'real'   : str(TEST_MODE).lower()
-					   })
-  desc = "Project Random is running a one-question quiz. \n\n"+
-  	"Note: You may only participate in one ProjectRandom experiment."
+
+  # make sure to encode ampersands, otherwise the ExternalQuestion schema gets
+  # pretty angry: http://alexeymk.com/xsanyuri-doesnt-allow-ampersands
+  q_url = urllib.quote_plus(EXTERNAL_Q_URL + "?" + \ 
+		  	    urllib.urlencode({'heads'  : heads,
+	   				      'tails'  : tails,
+	 				      'flipGen': str(flip_but).lower(),
+	 				      'real'   : str(not TEST_MODE).lower()
+					     })
+	  )
+  print q_url
+  desc = """Project Random is running a one-question quiz.
+   	    Note: You may only participate in one ProjectRandom experiment."""
   title = "One quick question. Should take ~15 seconds."
   result_hits = []
 
@@ -132,11 +145,14 @@ def create_ht_hits(qual_groups, base_price=0.05, heads='10c', tails='5c',
     return post_html_question(title, desc, quals, 
       num_tasks=50, price=base_price, q_url=q_url, 
       keywords=["survey", "test", "easy", ])
-  
+
   for group in qual_groups:
     # http://docs.python.org/tutorial/controlflow.html#unpacking-argument-lists
     group_name = str(group.values())
-    result_hits.append((group, projectrandom_q(buildQuals(**group))))
+
+    print group_name, build_quals(**group)
+
+    result_hits.append((group, projectrandom_q(build_quals(**group))))
   
   return result_hits
   
@@ -148,7 +164,7 @@ def has_result(answer): # some edge-cases don't have results.
   return any(map(lambda ans: ans.QuestionIdentifier == u'result', answer[0]))
 def is_head(answer): 
   return answer_lookup(answer, u'result')
-def answer_lookup(answer, key) 
+def answer_lookup(answer, key): 
   """in multiple-part answer scenarios, use key to look up answer"""
   # with multiple rows, check all parts of answer
   right_part = filter(lambda ans: ans.QuestionIdentifier == key, answer[0])
@@ -245,8 +261,8 @@ qual_groups = [{'accept_min': 100, 'min_done':20},
 	       {'accept_max': 89, 'accept_min': 98, 'min_done':20},
 	       {'max_done': 19}
 	      ]
-# (1) generate the inital experiment: 
-# print create_ht_hits(qual_groups, .05, '10c', '5c', True)
+# (1) generate the experiment: 
+# print create_ht_hits(qual_groups, .05, '10c', '5c', False)
 # (2) after experiment is run, print out aggregate-level results: 
 # print_csv(hit_list5)
 # (3) pay participants: 
