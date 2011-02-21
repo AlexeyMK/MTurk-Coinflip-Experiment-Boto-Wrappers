@@ -3,6 +3,9 @@
    
    See: (http://alexeymk.com/flipping-coins-through-mechanical-turk-part-1).
 
+   To set up boto, make sure to add a ~/.boto file with your MTurk details:
+   (http://code.google.com/p/boto/wiki/BotoConfig)
+
    To replicate the experiment, a matching php file (flipacoin_generic.php)
    would also be required. Alas, that is more code that should also probably
    get cleaned up before it sees the light of day.
